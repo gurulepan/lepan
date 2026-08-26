@@ -1,5 +1,7 @@
 import { Bot } from "grammy";
-import { OpenRouter } from "@openrouter/sdk";
+import { OpenRouter } from "@openrouter/agent";
+import { callModel } from "@openrouter/agent/call-model";
+import { createMCPTools } from "@openrouter/mcp";
 import dotenv from "dotenv";
 import { system_promt } from "./system-prompt.js";
 
@@ -10,6 +12,22 @@ const openrouter = new OpenRouter({
 });
 
 const bot = new Bot(process.env.BOT_API_KEY);
+
+// MCP-подключение к 1С через aprovodka
+let mcp = null;
+
+async function getMcpTools() {
+  if (!mcp) {
+    const mcpUrl = `http://localhost:${process.env.MCP_PORT || 3000}/mcp`;
+    console.log(`Подключение к MCP-серверу: ${mcpUrl}`);
+    mcp = await createMCPTools({
+      url: mcpUrl,
+      auth: { kind: "headers", headers: {} },
+    });
+    console.log(`MCP подключён, инструментов: ${mcp.tools.length}`);
+  }
+  return mcp.tools;
+}
 
 bot.command("start", async (ctx) => {
   await ctx.reply("Я AI Guru. Чем могу помочь?");
@@ -22,10 +40,7 @@ bot.on("message", async (ctx) => {
     let typingInterval = null;
 
     try {
-      // Показываем «печатает…»
       await ctx.api.sendChatAction(ctx.chat.id, "typing");
-
-      // Обновляем индикатор каждые 3.5 секунды
       typingInterval = setInterval(async () => {
         try {
           await ctx.api.sendChatAction(ctx.chat.id, "typing");
@@ -33,7 +48,6 @@ bot.on("message", async (ctx) => {
       }, 3500);
 
       const question = ctx.message.text;
-
       const today = new Date().toLocaleDateString("ru-RU", {
         weekday: "long",
         year: "numeric",
@@ -41,43 +55,46 @@ bot.on("message", async (ctx) => {
         day: "numeric",
       });
 
-      const stream = await openrouter.chat.send({
-        chatRequest: {
-          model: "openai/gpt-oss-120b",
-          // model: "liquid/lfm-2.5-2.6b:free",
-          messages: [
-            {
-              role: "system",
-              content: system_promt,
-            },
-            {
-              role: "user",
-              content: question,
-            },
-          ],
-          stream: true,
-        },
-      });
-
-      let response = "";
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content;
-        if (content) {
-          response += content;
-          process.stdout.write(content);
-        }
+      // Получаем MCP-инструменты 1С
+      let tools = [];
+      try {
+        tools = await getMcpTools();
+      } catch (e) {
+        console.warn("MCP недоступен, работаю без 1С:", e.message);
       }
 
-      clearInterval(typingInterval);
+      const result = callModel(openrouter, {
+        model: "openai/gpt-oss-120b",
+        input: [
+          {
+            role: "system",
+            content: system_promt,
+          },
+          {
+            role: "user",
+            content: `Сегодня ${today}.\n\nВопрос: ${question}`,
+          },
+        ],
+        tools: tools.length > 0 ? tools : undefined,
+      });
 
+      const response = await result.getText();
+
+      clearInterval(typingInterval);
       await ctx.reply(response || "Пустой ответ 😕");
     } catch (error) {
       if (typingInterval) clearInterval(typingInterval);
-
       console.error("AI error:", error);
       await ctx.reply("Извините, технические ошибки. Попробуйте снова.");
     }
   }
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  if (mcp) await mcp.close();
+  bot.stop();
+  process.exit(0);
 });
 
 bot.start({
