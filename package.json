@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@openrouter/agent": "^0.11.0",
     "@openrouter/mcp": "^1.1.1",
     "@openrouter/sdk": "^1.2.48",

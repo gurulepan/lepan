@@ -1,101 +1,48 @@
-import { Bot } from "grammy";
-import { OpenRouter } from "@openrouter/agent";
-import { callModel } from "@openrouter/agent/call-model";
-import { createMCPTools } from "@openrouter/mcp";
-import dotenv from "dotenv";
-import { system_promt } from "./system-prompt.js";
+import { createBot } from "./src/bot/bot.js";
+import { closeMcp, getMcpTools } from "./src/mcp/index.js";
+import { stopMcpServer } from "./src/mcp/server.js";
+import { config } from "./src/config.js";
 
-dotenv.config();
+const bot = createBot();
 
-const openrouter = new OpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+// ========================================
+// GRACEFUL SHUTDOWN
+// ========================================
 
-const bot = new Bot(process.env.BOT_API_KEY);
+async function shutdown() {
+  console.log("\nОстановка бота...");
 
-// MCP-подключение к 1С через aprovodka
-let mcp = null;
+  await closeMcp();
+  await stopMcpServer();
 
-async function getMcpTools() {
-  if (!mcp) {
-    const mcpUrl = `http://localhost:${process.env.MCP_PORT || 3000}/mcp`;
-    console.log(`Подключение к MCP-серверу: ${mcpUrl}`);
-    mcp = await createMCPTools({
-      url: mcpUrl,
-      auth: { kind: "headers", headers: {} },
-    });
-    console.log(`MCP подключён, инструментов: ${mcp.tools.length}`);
-  }
-  return mcp.tools;
+  bot.stop();
+
+  process.exit(0);
 }
 
-bot.command("start", async (ctx) => {
-  await ctx.reply("Я AI Guru. Чем могу помочь?");
-});
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-bot.on("message", async (ctx) => {
-  console.log("text", ctx.message.text);
+// ========================================
+// START BOT
+// ========================================
 
-  if (ctx.from?.id && ctx.message?.text && !ctx.from.isBot) {
-    let typingInterval = null;
+console.log("========================================");
+console.log("        AI GURU START");
+console.log("========================================");
 
-    try {
-      await ctx.api.sendChatAction(ctx.chat.id, "typing");
-      typingInterval = setInterval(async () => {
-        try {
-          await ctx.api.sendChatAction(ctx.chat.id, "typing");
-        } catch (e) {}
-      }, 3500);
+console.log(`MCP: ${config.mcpUrl}`);
+console.log("OpenRouter: подключён");
+console.log("Telegram: запуск...");
 
-      const question = ctx.message.text;
-      const today = new Date().toLocaleDateString("ru-RU", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-
-      // Получаем MCP-инструменты 1С
-      let tools = [];
-      try {
-        tools = await getMcpTools();
-      } catch (e) {
-        console.warn("MCP недоступен, работаю без 1С:", e.message);
-      }
-
-      const result = callModel(openrouter, {
-        model: "openai/gpt-oss-120b",
-        input: [
-          {
-            role: "system",
-            content: system_promt,
-          },
-          {
-            role: "user",
-            content: `Сегодня ${today}.\n\nВопрос: ${question}`,
-          },
-        ],
-        tools: tools.length > 0 ? tools : undefined,
-      });
-
-      const response = await result.getText();
-
-      clearInterval(typingInterval);
-      await ctx.reply(response || "Пустой ответ 😕");
-    } catch (error) {
-      if (typingInterval) clearInterval(typingInterval);
-      console.error("AI error:", error);
-      await ctx.reply("Извините, технические ошибки. Попробуйте снова.");
-    }
-  }
-});
-
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  if (mcp) await mcp.close();
-  bot.stop();
-  process.exit(0);
-});
+// Прогрев MCP при автозапуске: поднимаем сервер и подключаем инструменты
+// сразу, а не при первом сообщении пользователя. Ошибка прогрева не роняет
+// бот — каждый запрос всё равно повторит попытку через getMcpTools().
+if (config.mcpAutostart) {
+  getMcpTools().catch((error) => {
+    console.error("MCP недоступен при старте:", error?.message || error);
+  });
+}
 
 bot.start({
   drop_pending_updates: true,
