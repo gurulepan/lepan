@@ -1,0 +1,8 @@
+services:
+  bot:
+    build: .
+    image: guru-bot
+    container_name: guru-bot
+    env_file: .env
+    init: true
+    restart: unless-stopped
