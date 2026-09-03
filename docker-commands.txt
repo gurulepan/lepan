@@ -1,0 +1,112 @@
+# ============================================================
+# DOCKER COMMANDS — проект guru (Telegram-бот AI Guru)
+# ============================================================
+
+# ============ 1. СБОРКА ОБРАЗА ============
+
+cd ~/Code/guru
+
+# Стандартная сборка + запуск через compose
+# (работает после фикса DNS, см. раздел 5)
+docker compose up -d --build
+
+# Вариант через build — использовался из-за DNS-проблемы BuildKit
+# (стаб-резолвер 127.0.0.53 из /etc/resolv.conf не работает внутри сети сборки)
+docker build --network=host -t guru-bot .
+
+# Примечание: если группа docker ещё не активна в текущей сессии
+# (после usermod -aG docker без перелогина), обёртывайте команды:
+#   sg docker -c "docker compose up -d --build"
+
+# ============ 2. ЗАПУСК КОНТЕЙНЕРА ============
+
+docker compose up -d          # сборка (если нужно) + запуск в фоне
+docker compose ps             # статус контейнеров проекта
+docker compose logs -f bot    # логи бота в реальном времени (Ctrl+C — выход)
+docker compose restart        # рестарт контейнера
+docker compose stop           # остановить (контейнер остаётся)
+docker compose start          # запустить остановленный
+
+# ============ 3. УДАЛЕНИЕ КОНТЕЙНЕРА И ОБРАЗА ============
+
+cd ~/Code/guru
+docker compose down                        # стоп + удаление контейнера и сети
+docker rmi guru-bot                        # удаление образа бота
+docker rmi node:24.19.0-alpine             # удаление базового образа (опционально)
+docker builder prune -a -f                 # очистка кэша сборки (опционально)
+
+# ============ 4. ПОЛНОЕ УДАЛЕНИЕ DOCKER ИЗ СИСТЕМЫ ============
+
+docker compose down    # если контейнер ещё запущен
+
+# Удалить пакеты Docker
+sudo apt-get purge -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras
+sudo apt-get autoremove -y
+
+# Удалить данные Docker (образы, контейнеры, тома)
+sudo rm -rf /var/lib/docker /var/lib/containerd
+
+# Удалить репозиторий и ключ Docker из apt
+sudo rm -f /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.asc
+sudo apt-get update
+
+# Удалить группу docker (опционально)
+sudo groupdel docker
+
+# ============ 5. СПРАВКА: ФИКС DNS ============
+
+# Проблема: BuildKit падает с "DNS: transient error" при apk/pnpm install,
+# т.к. /etc/resolv.conf указывает на стаб systemd-resolved (127.0.0.53),
+# который недоступен внутри изолированной сети сборки.
+# Решение — прописать публичные DNS в daemon.json:
+
+echo '{"dns": ["8.8.8.8", "1.1.1.1"]}' | sudo tee /etc/docker/daemon.json
+sudo systemctl restart docker
+
+# После этого docker compose up -d --build работает без --network=host
+
+# ============ 6. ПОЛЕЗНЫЕ КОМАНДЫ DOCKER ============
+
+# --- Инспекция ---
+docker ps                        # запущенные контейнеры
+docker ps -a                     # все контейнеры (включая остановленные)
+docker images                    # список образов
+docker logs -f guru-bot          # логи контейнера в реальном времени
+docker logs --tail 100 guru-bot  # последние 100 строк логов
+docker inspect guru-bot          # полная информация о контейнере (JSON)
+docker stats                     # потребление CPU/RAM всеми контейнерами
+docker top guru-bot              # процессы внутри контейнера
+
+# --- Выполнение внутри контейнера ---
+docker exec -it guru-bot sh      # зайти в шелл контейнера (alpine — sh, не bash)
+docker exec guru-bot ls /app     # выполнить команду без входа
+
+# --- Управление контейнером напрямую ---
+docker stop guru-bot             # остановить
+docker start guru-bot            # запустить обратно
+docker restart guru-bot          # рестарт
+docker rm -f guru-bot            # удалить контейнер (с принуд. стопом)
+
+# --- Работа с образами ---
+docker history guru-bot          # слои образа
+docker tag guru-bot guru-bot:v1  # тег версии
+docker save -o guru-bot.tar guru-bot      # экспорт образа в файл
+docker load -i guru-bot.tar               # импорт образа из файла
+
+# --- Очистка (housekeeping) ---
+docker system df                 # сколько места занимает docker
+docker system prune              # удалить неиспользуемое (осторожно!)
+docker system prune -a           # + все неиспользуемые образы
+docker image prune -a            # удалить образы без контейнеров
+docker container prune           # удалить остановленные контейнеры
+docker volume prune              # удалить неиспользуемые тома
+
+# --- Логи compose-проекта ---
+docker compose logs -f           # логи всех сервисов
+docker compose logs --since 5m   # логи за последние 5 минут
+docker compose ps -a             # все контейнеры проекта (вкл. остановленные)
+
+# --- Отладка сети внутри контейнера ---
+docker exec guru-bot ping -c 3 8.8.8.8              # доступ к внешней сети
+docker exec guru-bot nslookup api.telegram.org      # проверка DNS

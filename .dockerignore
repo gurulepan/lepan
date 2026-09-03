@@ -39,6 +39,9 @@ Thumbs.db
 *.swp
 *.swo
 
+.github/
+.npmrc
+eslint.config.js
 Makefile
 test-mcp.mjs
 README.md

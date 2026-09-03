@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { config } from "../config.js";
+import { config } from "../../../../app/config.js";
 
 const HEALTH_POLL_INTERVAL_MS = 500;
 const HEALTH_TIMEOUT_MS = 15000;

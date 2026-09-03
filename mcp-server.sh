@@ -3,6 +3,9 @@
 # Конфигурация: Комплексная автоматизация 2.5 с расширениями
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
 # Загрузка .env
 set -a
 source .env 2>/dev/null || true
@@ -19,6 +22,13 @@ set +a
 # Write-safety: off (запись разрешена), preview (dry-run), approval (с подтверждением)
 : "${ONEC_WRITE_MODE:=preview}"
 
+APROVODKA_BIN="${SCRIPT_DIR}/node_modules/.bin/aprovodka"
+
+if [ ! -x "${APROVODKA_BIN}" ]; then
+  echo "Ошибка: ${APROVODKA_BIN} не найден. Выполните: pnpm install" >&2
+  exit 1
+fi
+
 echo "🚀 Запуск MCP-сервера aprovodka на порту ${MCP_PORT}"
 echo "   1С: ${ONEC_BASE_URL}"
 echo "   Пользователь: ${ONEC_LOGIN}"
@@ -31,4 +41,4 @@ exec env \
   ONEC_LOGIN="${ONEC_LOGIN}" \
   ONEC_PASSWORD="${ONEC_PASSWORD}" \
   ONEC_WRITE_MODE="${ONEC_WRITE_MODE}" \
-  npx -y @theyahia/aprovodka --http
+  "${APROVODKA_BIN}" --http

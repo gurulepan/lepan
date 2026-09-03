@@ -56,3 +56,4 @@ Desktop.ini
 
 # Local TypeScript files
 *.tsbuildinfo
+.env

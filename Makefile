@@ -1,6 +1,9 @@
 install:
 	pnpm install --frozen-lockfile
 
+lint:
+	pnpm lint
+
 # Запуск MCP-сервера 1С (aprovodka) в HTTP-режиме
 mcp:
 	./mcp-server.sh
@@ -17,6 +20,14 @@ mcp-health:
 # Запуск бота
 start:
 	pnpm start
+
+# Запуск бота в dev-режиме (nodemon)
+dev:
+	pnpm dev
+
+# Сборка docker-образа
+image:
+	docker build -t guru-bot:local .
 
 # Запуск бота + MCP-сервера
 start-all:

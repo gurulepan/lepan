@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",
@@ -15,8 +17,13 @@
     "@openrouter/agent": "^0.11.0",
     "@openrouter/mcp": "^1.1.1",
     "@openrouter/sdk": "^1.2.48",
+    "@theyahia/aprovodka": "4.3.0",
     "dotenv": "^17.4.2",
-    "grammy": "^1.45.1",
+    "grammy": "^1.45.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
     "nodemon": "^3.1.14"
   }
 }
