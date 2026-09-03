@@ -48,6 +48,32 @@ ${question}`,
       tools,
 
       stopWhen: [stepCountIs(config.maxToolSteps)],
+
+      hooks: {
+        PreToolUse: [
+          {
+            handler: ({ toolName, toolInput }) =>
+              console.log("[TOOL →]", toolName, JSON.stringify(toolInput)),
+          },
+        ],
+        PostToolUse: [
+          {
+            handler: ({ toolName, toolOutput, durationMs }) =>
+              console.log(
+                "[TOOL ✓]",
+                toolName,
+                `${durationMs}ms`,
+                JSON.stringify(toolOutput),
+              ),
+          },
+        ],
+        PostToolUseFailure: [
+          {
+            handler: ({ toolName, error }) =>
+              console.error("[TOOL ✗]", toolName, error),
+          },
+        ],
+      },
     });
 
     return result.getText();
