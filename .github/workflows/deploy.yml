@@ -14,14 +14,25 @@ jobs:
     steps:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          APP_DIR: ${{ secrets.APP_DIR }}
+          REPO_URL: https://github.com/${{ github.repository }}.git
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
+          envs: APP_DIR,REPO_URL
           script: |
             set -e
-            cd ${{ secrets.APP_DIR }}
+            [ -n "$APP_DIR" ] || { echo "APP_DIR secret is not set"; exit 1; }
+            cd "$APP_DIR"
+            if [ ! -d .git ]; then
+              echo "No .git found, initializing repo..."
+              git init -b main .
+              git remote add origin "$REPO_URL"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
             git pull origin main
             docker compose up -d --build --pull always
             docker image prune -f
