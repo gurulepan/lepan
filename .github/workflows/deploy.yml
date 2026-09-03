@@ -1,0 +1,27 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ${{ secrets.APP_DIR }}
+            git pull origin main
+            docker compose up -d --build --pull always
+            docker image prune -f
